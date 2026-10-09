@@ -51,9 +51,10 @@
       <label>Or use a song file from this computer (mp3, m4a, wav):</label>
       <div class="row" style="align-items:center">
         <input type="file" id="file" accept="audio/*">
-        <span>BPM</span><input type="number" id="bpm" value="120" min="50" max="220">
+        <span>BPM</span><input type="number" id="bpm" value="120" min="50" max="220" step="any">
         <button class="small" id="tap" type="button">Tap the beat</button>
       </div>
+      <div id="tempoNote" style="color:var(--dim);font-size:14px;margin-top:8px"></div>
     </div>
   </div>
 
@@ -123,6 +124,31 @@ const SONGS = [
 ];
 /* ============================ end of song list ============================ */
 
+/* ======================================================================
+   SONGS ON THIS COMPUTER  -  tempos the game already knows.
+
+   When you pick a song file from this computer, the game looks for a word
+   pattern from this list in the file name and fills in the BPM for you.
+   "match" = words from the file name, joined with dashes, all lowercase.
+   "offset" = seconds into the song where the first beat lands.
+   Fast songs are listed at half speed so the poses are easier to follow.
+   Any song not listed here: type the BPM once (or tap the beat) and the
+   game remembers it on this computer.
+   ====================================================================== */
+const KNOWN_TEMPOS = [
+  { match: "party-in-the-u-s-a",  title: "Party in the U.S.A.",            bpm: 96,    offset: 0.107 },
+  { match: "intentions",          title: "Intentions",                     bpm: 74,    offset: 0.184 },
+  { match: "bieber-sorry",        title: "Sorry",                          bpm: 99.9,  offset: 0.009 },
+  { match: "washed",              title: "WASHED",                         bpm: 139,   offset: 0.263 },
+  { match: "i-feel-so-alive",     title: "I Feel So Alive",                bpm: 127.98,offset: 0.161 },
+  { match: "firework",            title: "Firework",                       bpm: 124.02,offset: 0.416 },
+  { match: "goodbye-yesterday",   title: "Goodbye Yesterday",              bpm: 74.93, offset: 0.075 },
+  { match: "i-can-t-quit",        title: "I Can't Quit",                   bpm: 128,   offset: 0.117 },
+  { match: "this-is-living",      title: "This Is Living",                 bpm: 128,   offset: 0.278 },
+  { match: "good-day",            title: "Good Day",                       bpm: 76,    offset: 0.080 },
+  { match: "happy",               title: "Happy",                          bpm: 79.93, offset: 0.270 },
+];
+
 const LEVELS = [
   { name: "Easy",   note: "A new pose every 4 beats", step: 4, extra: 0,   good: 0.70, perfect: 0.87 },
   { name: "Medium", note: "A new pose every 2 beats", step: 2, extra: 0,   good: 0.72, perfect: 0.88 },
@@ -165,7 +191,7 @@ const $ = id => document.getElementById(id);
 const video = $("cam"), stage = $("stage"), ctx = stage.getContext("2d");
 const rad = d => d * Math.PI / 180;
 
-let songPick = 0, levelPick = 0, dancePick = "auto", ownFile = null, ownUrl = null;
+let songPick = 0, levelPick = 0, dancePick = "auto", ownFile = null, ownUrl = null, ownTempo = null;
 let stream = null, running = false, raf = 0, G = null, lastRecorded = null;
 
 /* ---------------- saved routines ---------------- */
@@ -177,7 +203,31 @@ function knownRoutine(song) { return sessionRoutines[song.title] || localRoutine
 
 /* ---------------- menu ---------------- */
 function show(id) { for (const s of document.querySelectorAll(".screen")) s.classList.toggle("on", s.id === id); }
-function cleanName(n) { return n.replace(/\.[^.]+$/, "").replace(/[<>&]/g, ""); }
+function cleanName(n) {
+  return n.replace(/\.[^.]+$/, "")
+    .replace(/^.*?YouTube_Media_.{11}_/i, "")                 // download-site prefix
+    .replace(/_\d+_\d+k$/i, "")                               // download-site suffix
+    .replace(/[-_]+(Official[-_ ]*(Music[-_ ]*|Lyric[-_ ]*)?(Video|Audio)|Audio|Lyric[-_ ]*Video)\b.*$/i, "")
+    .replace(/[-_]+/g, " ").replace(/[<>&]/g, "").trim() || "My song";
+}
+const slug = n => n.toLowerCase().replace(/[^a-z0-9]+/g, "-");
+const tempoKey = title => "dancecam.tempo." + title;
+function tempoFor(fileName) {
+  const known = KNOWN_TEMPOS.find(k => slug(fileName).includes(k.match));
+  const title = known ? known.title : cleanName(fileName);
+  let saved = null; try { saved = JSON.parse(localStorage.getItem(tempoKey(title))); } catch (e) {}
+  if (saved && saved.bpm) return { title, bpm: saved.bpm, offset: saved.offset || 0, from: "saved" };
+  if (known) return { title, bpm: known.bpm, offset: known.offset, from: "known" };
+  return { title, bpm: 0, offset: 0, from: "new" };
+}
+function rememberTempo() {
+  if (!ownTempo) return;
+  const bpm = +$("bpm").value; if (!(bpm >= 50 && bpm <= 220)) return;
+  if (Math.abs(bpm - ownTempo.bpm) > 0.05) ownTempo.offset = 0;   // a new BPM means the old beat timing no longer fits
+  ownTempo.bpm = bpm;
+  try { localStorage.setItem(tempoKey(ownTempo.title), JSON.stringify({ bpm, offset: ownTempo.offset })); } catch (e) {}
+  $("tempoNote").textContent = "Saved: this computer will remember " + bpm + " BPM for " + ownTempo.title + ".";
+}
 function pickBtn(parent, html, on, fn) {
   const b = document.createElement("button");
   b.className = "pick" + (on ? " sel" : ""); b.innerHTML = html; b.onclick = fn; parent.appendChild(b);
@@ -185,7 +235,8 @@ function pickBtn(parent, html, on, fn) {
 function currentSong() {
   if (songPick === -1 && ownFile) {
     const bpm = Math.min(220, Math.max(50, +$("bpm").value || 120));
-    return { title: cleanName(ownFile.name), file: ownUrl, bpm, offset: 0 };
+    const offset = ownTempo && Math.abs(bpm - ownTempo.bpm) < 0.05 ? ownTempo.offset : 0;
+    return { title: ownTempo ? ownTempo.title : cleanName(ownFile.name), file: ownUrl, bpm, offset };
   }
   return SONGS[Math.max(0, songPick)];
 }
@@ -193,7 +244,7 @@ function buildMenu() {
   $("songs").innerHTML = "";
   SONGS.forEach((s, i) => pickBtn($("songs"), s.title + "<small>" + s.bpm + " BPM" + (s.builtIn ? " · built-in beat" : "") + "</small>",
     songPick === i, () => { songPick = i; dancePick = "auto"; buildMenu(); }));
-  if (ownFile) pickBtn($("songs"), cleanName(ownFile.name) + "<small>your file</small>", songPick === -1,
+  if (ownFile) pickBtn($("songs"), (ownTempo ? ownTempo.title : cleanName(ownFile.name)) + "<small>your file</small>", songPick === -1,
     () => { songPick = -1; dancePick = "auto"; buildMenu(); });
 
   const song = currentSong(), mine = knownRoutine(song);
@@ -210,7 +261,16 @@ function buildMenu() {
 $("file").onchange = e => {
   const f = e.target.files[0]; if (!f) return;
   ownFile = f; if (ownUrl) URL.revokeObjectURL(ownUrl);
-  ownUrl = URL.createObjectURL(f); songPick = -1; dancePick = "auto"; buildMenu();
+  ownUrl = URL.createObjectURL(f); songPick = -1; dancePick = "auto";
+  ownTempo = tempoFor(f.name);
+  if (ownTempo.bpm) {
+    $("bpm").value = ownTempo.bpm;
+    $("tempoNote").textContent = ownTempo.title + ": " + ownTempo.bpm + " BPM filled in" + (ownTempo.from === "saved" ? " from last time." : ".");
+  } else {
+    $("bpm").value = 120;
+    $("tempoNote").textContent = "New song: type its BPM or use Tap the beat. The game will remember it next time.";
+  }
+  buildMenu();
 };
 $("rfile").onchange = async e => {
   const f = e.target.files[0]; if (!f) return;
@@ -227,8 +287,9 @@ $("tap").onclick = () => {
   const now = performance.now();
   if (taps.length && now - taps[taps.length - 1] > 2500) taps = [];
   taps.push(now); if (taps.length > 8) taps.shift();
-  if (taps.length >= 3) $("bpm").value = Math.round(60000 / ((taps[taps.length - 1] - taps[0]) / (taps.length - 1)));
+  if (taps.length >= 3) { $("bpm").value = Math.round(60000 / ((taps[taps.length - 1] - taps[0]) / (taps.length - 1))); rememberTempo(); }
 };
+$("bpm").onchange = rememberTempo;
 
 /* ---------------- camera and pose tracking ---------------- */
 async function openCamera() {
