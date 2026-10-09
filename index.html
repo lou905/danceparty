@@ -14,7 +14,7 @@
   h1{font-size:clamp(40px,9vw,84px);margin:0;letter-spacing:2px;font-weight:900;line-height:1;
      background:linear-gradient(90deg,var(--pink),var(--yellow),var(--cyan));-webkit-background-clip:text;background-clip:text;color:transparent}
   .tag{color:var(--dim);margin:10px 0 22px;text-align:center}
-  .card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:18px;width:min(720px,100%);margin-bottom:14px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:18px;width:min(760px,100%);margin-bottom:14px}
   .card h2{margin:0 0 12px;font-size:14px;letter-spacing:2px;text-transform:uppercase;color:var(--cyan)}
   .row{display:flex;flex-wrap:wrap;gap:10px}
   .pick{flex:1 1 150px;background:#1e1e3e;border:2px solid var(--line);color:var(--text);border-radius:12px;padding:12px;cursor:pointer;text-align:left}
@@ -25,13 +25,13 @@
   .own input[type=number]{width:90px;background:#1e1e3e;color:var(--text);border:1px solid var(--line);border-radius:8px;padding:8px}
   .small{background:#1e1e3e;border:1px solid var(--line);color:var(--text);border-radius:8px;padding:8px 12px;cursor:pointer}
   .go{background:linear-gradient(90deg,var(--pink),#ff7a3d);border:0;color:#fff;font-weight:800;font-size:22px;padding:16px 44px;border-radius:999px;cursor:pointer;margin-top:6px}
-  .go:disabled{opacity:.5;cursor:default}
-  .hint{color:var(--dim);font-size:14px;margin-top:14px;text-align:center;max-width:640px;line-height:1.5}
-  #err{color:#ff8080;margin-top:10px;text-align:center;min-height:1.2em}
+  .go:disabled,.small:disabled{opacity:.5;cursor:default}
+  .hint{color:var(--dim);font-size:14px;margin-top:14px;text-align:center;max-width:660px;line-height:1.5}
+  #err{color:#ff8080;margin-top:10px;text-align:center;min-height:1.2em;max-width:660px}
   #game{padding:0;position:fixed;inset:0;background:#000}
   #stage{position:absolute;inset:0;width:100%;height:100%;display:block}
   #cam{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}
-  #quit{position:absolute;right:14px;bottom:14px;z-index:2;opacity:.8}
+  #quit{position:absolute;left:14px;top:64px;z-index:2;opacity:.8}
   #results .big{font-size:clamp(64px,16vw,140px);font-weight:900;line-height:1;color:var(--yellow)}
   #results .stats{display:flex;gap:26px;flex-wrap:wrap;justify-content:center;margin:18px 0 26px}
   #results .stat b{display:block;font-size:30px}
@@ -42,7 +42,7 @@
 
 <div id="menu" class="screen on">
   <h1>DANCE CAM</h1>
-  <p class="tag">Hit the glowing targets on the beat. Your webcam is the controller.</p>
+  <p class="tag">Copy the dancer's pose on the beat. The camera tracks your whole body.</p>
 
   <div class="card">
     <h2>1. Pick a song</h2>
@@ -58,13 +58,26 @@
   </div>
 
   <div class="card">
-    <h2>2. Pick a level</h2>
+    <h2>2. Pick the dance</h2>
+    <div class="row" id="dances"></div>
+    <div class="own">
+      <label>Make your own dance for this song: one person dances while the camera saves their poses.</label>
+      <div class="row" style="align-items:center">
+        <button class="small" id="record" type="button">Record a routine</button>
+        <span style="color:var(--dim)">or load a routine file:</span>
+        <input type="file" id="rfile" accept=".json,application/json">
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>3. Pick a level</h2>
     <div class="row" id="levels"></div>
   </div>
 
   <button class="go" id="start">START</button>
   <div id="err"></div>
-  <p class="hint">Stand back until your head and both arms fit on screen. A plain background and good light work best. Allow the camera when your browser asks. Nothing is recorded or sent anywhere.</p>
+  <p class="hint">Stand back until the camera sees you from head to hips, with room to stretch both arms out. One dancer at a time. Good light helps. Nothing is recorded as video, and nothing leaves this computer.</p>
 </div>
 
 <div id="game" class="screen">
@@ -76,31 +89,32 @@
 <div id="results" class="screen">
   <p class="tag" id="rsong"></p>
   <div class="big" id="grade">A</div>
-  <div class="stats">
-    <div class="stat"><b id="rscore">0</b><span>Score</span></div>
-    <div class="stat"><b id="racc">0%</b><span>Accuracy</span></div>
-    <div class="stat"><b id="rcombo">0</b><span>Best combo</span></div>
-    <div class="stat"><b id="rperf">0</b><span>Perfect hits</span></div>
-  </div>
-  <div class="row" style="justify-content:center">
+  <div class="stats" id="rstats"></div>
+  <div class="row" style="justify-content:center;align-items:center">
     <button class="go" id="again">PLAY AGAIN</button>
-    <button class="small" id="back" style="align-self:center">Change song</button>
+    <button class="small" id="dl" style="display:none">Download routine file</button>
+    <button class="small" id="back">Back to menu</button>
   </div>
+  <p class="hint" id="rhint"></p>
 </div>
 
+<script src="pose/pose.js"></script>
 <script>
 /* ======================================================================
    SONG LIST  -  edit this part to change the songs.
 
    Built-in beats need no files. To add your own song for everyone:
-     1. Put the audio file in the same folder as this page
-        (for example in a folder named "songs").
+     1. Put the audio file in the "songs" folder next to this page.
      2. Add a line like the example below with its title, file path and BPM
         (beats per minute). "offset" is how many seconds into the file the
         first beat lands; leave it 0 if the music starts right away.
+     3. Optional: record a routine in the game, download the routine file,
+        put it in the "routines" folder and name it on the same line.
+        Then everyone gets that dance.
 
    Example:
-     { title: "School Fight Song", file: "songs/fight-song.mp3", bpm: 128, offset: 0 },
+     { title: "School Fight Song", file: "songs/fight-song.mp3", bpm: 128, offset: 0,
+       routine: "routines/fight-song.json" },
    ====================================================================== */
 const SONGS = [
   { title: "Warm Up",  bpm: 100, builtIn: true, seconds: 60, key: 0 },
@@ -110,80 +124,64 @@ const SONGS = [
 /* ============================ end of song list ============================ */
 
 const LEVELS = [
-  { name: "Easy",   note: "A move every 2 beats",  step: 2, extra: 0,    doubles: 0 },
-  { name: "Medium", note: "Faster, with combos",   step: 2, extra: 0.35, doubles: 0.2 },
-  { name: "Hard",   note: "A move on every beat",  step: 1, extra: 0,    doubles: 0.25 },
+  { name: "Easy",   note: "A new pose every 4 beats", step: 4, extra: 0,   good: 0.70, perfect: 0.87 },
+  { name: "Medium", note: "A new pose every 2 beats", step: 2, extra: 0,   good: 0.72, perfect: 0.88 },
+  { name: "Hard",   note: "Faster and stricter",      step: 2, extra: 0.3, good: 0.80, perfect: 0.92 },
 ];
 
-// Target spots, as a fraction of the screen (x, y).
-const ZONES = [
-  { x: 0.16, y: 0.20 }, { x: 0.84, y: 0.20 },   // 0,1 high left / high right
-  { x: 0.11, y: 0.52 }, { x: 0.89, y: 0.52 },   // 2,3 middle left / middle right
-  { x: 0.20, y: 0.84 }, { x: 0.80, y: 0.84 },   // 4,5 low left / low right
+/* Built-in poses. Each number is the direction a body part points, in degrees:
+   0 = toward the right side of the screen, 90 = down, 180 = left, 270 = up.
+   la = arm on the left side of the screen, ra = arm on the right side.
+   1 = upper arm (shoulder to elbow), 2 = forearm (elbow to wrist). */
+const POSES = [
+  { name: "T",            la1: 180, la2: 180, ra1: 0,   ra2: 0 },
+  { name: "Big Y",        la1: 235, la2: 235, ra1: 305, ra2: 305 },
+  { name: "Touchdown",    la1: 265, la2: 270, ra1: 275, ra2: 270 },
+  { name: "Goalpost",     la1: 180, la2: 270, ra1: 0,   ra2: 270 },
+  { name: "Left Up",      la1: 265, la2: 270, ra1: 0,   ra2: 0 },
+  { name: "Right Up",     la1: 180, la2: 180, ra1: 275, ra2: 270 },
+  { name: "Disco Right",  la1: 135, la2: 135, ra1: 315, ra2: 315 },
+  { name: "Disco Left",   la1: 225, la2: 225, ra1: 45,  ra2: 45 },
+  { name: "Hands on Hips",la1: 140, la2: 35,  ra1: 40,  ra2: 145 },
+  { name: "Low V",        la1: 145, la2: 145, ra1: 35,  ra2: 35 },
+  { name: "Robot",        la1: 180, la2: 270, ra1: 0,   ra2: 90 },
+  { name: "Dab",          la1: 215, la2: 215, ra1: 190, ra2: 215 },
+  { name: "Point Right",  la1: 110, la2: 20,  ra1: 0,   ra2: 0 },
+  { name: "Point Left",   la1: 180, la2: 180, ra1: 70,  ra2: 160 },
 ];
-const DOUBLES = [[0, 1], [2, 3], [0, 3], [1, 2], [4, 5]];
-const COLORS = ["#ff3d9a", "#29e0ff", "#ffd23d", "#4dff9a", "#b56bff", "#ff7a3d"];
+
+/* Body parts the game compares: [from point, to point, importance].
+   Point numbers are the pose model's: 11/12 shoulders, 13/14 elbows,
+   15/16 wrists, 23/24 hips, 25/26 knees, 27/28 ankles. */
+const LIMBS = {
+  la1: [11, 13, 1.2], la2: [13, 15, 1.2], ra1: [12, 14, 1.2], ra2: [14, 16, 1.2],
+  ll1: [23, 25, 0.8], ll2: [25, 27, 0.8], rl1: [24, 26, 0.8], rl2: [26, 28, 0.8],
+};
+const ARM_KEYS = ["la1", "la2", "ra1", "ra2"];
+const REST = { la1: 100, la2: 100, ra1: 80, ra2: 80, ll1: 95, ll2: 92, rl1: 85, rl2: 88, torso: 270 };
+const BONES = [[11,12],[11,13],[13,15],[12,14],[14,16],[11,23],[12,24],[23,24],[23,25],[25,27],[24,26],[26,28]];
 
 const $ = id => document.getElementById(id);
 const video = $("cam"), stage = $("stage"), ctx = stage.getContext("2d");
-const mcan = document.createElement("canvas"), mctx = mcan.getContext("2d", { willReadFrequently: true });
+const rad = d => d * Math.PI / 180;
 
-let songPick = 0, levelPick = 0, ownFile = null, ownUrl = null;
-let stream = null, running = false, raf = 0;
-let G = null; // current game state
+let songPick = 0, levelPick = 0, dancePick = "auto", ownFile = null, ownUrl = null;
+let stream = null, running = false, raf = 0, G = null, lastRecorded = null;
+
+/* ---------------- saved routines ---------------- */
+const keyFor = title => "dancecam.routine." + title;
+function localRoutine(title) { try { return JSON.parse(localStorage.getItem(keyFor(title))); } catch (e) { return null; } }
+function saveRoutine(r) { try { localStorage.setItem(keyFor(r.title), JSON.stringify(r)); } catch (e) {} }
+const sessionRoutines = {};
+function knownRoutine(song) { return sessionRoutines[song.title] || localRoutine(song.title) || null; }
 
 /* ---------------- menu ---------------- */
 function show(id) { for (const s of document.querySelectorAll(".screen")) s.classList.toggle("on", s.id === id); }
-
-function buildMenu() {
-  $("songs").innerHTML = "";
-  SONGS.forEach((s, i) => {
-    const b = document.createElement("button");
-    b.className = "pick" + (songPick === i ? " sel" : "");
-    b.innerHTML = s.title + "<small>" + s.bpm + " BPM" + (s.builtIn ? " · built-in beat" : "") + "</small>";
-    b.onclick = () => { songPick = i; buildMenu(); };
-    $("songs").appendChild(b);
-  });
-  if (ownFile) {
-    const b = document.createElement("button");
-    b.className = "pick" + (songPick === -1 ? " sel" : "");
-    b.innerHTML = cleanName(ownFile.name) + "<small>your file</small>";
-    b.onclick = () => { songPick = -1; buildMenu(); };
-    $("songs").appendChild(b);
-  }
-  $("levels").innerHTML = "";
-  LEVELS.forEach((l, i) => {
-    const b = document.createElement("button");
-    b.className = "pick" + (levelPick === i ? " sel" : "");
-    b.innerHTML = l.name + "<small>" + l.note + "</small>";
-    b.onclick = () => { levelPick = i; buildMenu(); };
-    $("levels").appendChild(b);
-  });
-}
 function cleanName(n) { return n.replace(/\.[^.]+$/, "").replace(/[<>&]/g, ""); }
-
-$("file").onchange = e => {
-  const f = e.target.files[0];
-  if (!f) return;
-  ownFile = f;
-  if (ownUrl) URL.revokeObjectURL(ownUrl);
-  ownUrl = URL.createObjectURL(f);
-  songPick = -1;
-  buildMenu();
-};
-
-let taps = [];
-$("tap").onclick = () => {
-  const now = performance.now();
-  if (taps.length && now - taps[taps.length - 1] > 2500) taps = [];
-  taps.push(now);
-  if (taps.length > 8) taps.shift();
-  if (taps.length >= 3) {
-    const gap = (taps[taps.length - 1] - taps[0]) / (taps.length - 1);
-    $("bpm").value = Math.round(60000 / gap);
-  }
-};
-
+function pickBtn(parent, html, on, fn) {
+  const b = document.createElement("button");
+  b.className = "pick" + (on ? " sel" : ""); b.innerHTML = html; b.onclick = fn; parent.appendChild(b);
+}
 function currentSong() {
   if (songPick === -1 && ownFile) {
     const bpm = Math.min(220, Math.max(50, +$("bpm").value || 120));
@@ -191,58 +189,156 @@ function currentSong() {
   }
   return SONGS[Math.max(0, songPick)];
 }
+function buildMenu() {
+  $("songs").innerHTML = "";
+  SONGS.forEach((s, i) => pickBtn($("songs"), s.title + "<small>" + s.bpm + " BPM" + (s.builtIn ? " · built-in beat" : "") + "</small>",
+    songPick === i, () => { songPick = i; dancePick = "auto"; buildMenu(); }));
+  if (ownFile) pickBtn($("songs"), cleanName(ownFile.name) + "<small>your file</small>", songPick === -1,
+    () => { songPick = -1; dancePick = "auto"; buildMenu(); });
 
-/* ---------------- camera ---------------- */
+  const song = currentSong(), mine = knownRoutine(song);
+  if (dancePick === "mine" && !mine) dancePick = "auto";
+  if (dancePick === "class" && !song.routine) dancePick = "auto";
+  $("dances").innerHTML = "";
+  pickBtn($("dances"), "Auto dance<small>the game picks the poses</small>", dancePick === "auto", () => { dancePick = "auto"; buildMenu(); });
+  if (song.routine) pickBtn($("dances"), "Class routine<small>the dance saved with this song</small>", dancePick === "class", () => { dancePick = "class"; buildMenu(); });
+  if (mine) pickBtn($("dances"), "Recorded routine<small>" + mine.moves.length + " poses saved on this computer</small>", dancePick === "mine", () => { dancePick = "mine"; buildMenu(); });
+
+  $("levels").innerHTML = "";
+  LEVELS.forEach((l, i) => pickBtn($("levels"), l.name + "<small>" + l.note + "</small>", levelPick === i, () => { levelPick = i; buildMenu(); }));
+}
+$("file").onchange = e => {
+  const f = e.target.files[0]; if (!f) return;
+  ownFile = f; if (ownUrl) URL.revokeObjectURL(ownUrl);
+  ownUrl = URL.createObjectURL(f); songPick = -1; dancePick = "auto"; buildMenu();
+};
+$("rfile").onchange = async e => {
+  const f = e.target.files[0]; if (!f) return;
+  try {
+    const r = JSON.parse(await f.text());
+    if (!r || !Array.isArray(r.moves) || !r.moves.length) throw 0;
+    const song = currentSong(); r.title = song.title;
+    sessionRoutines[song.title] = r; saveRoutine(r); dancePick = "mine"; $("err").textContent = ""; buildMenu();
+  } catch (x) { $("err").textContent = "That file is not a Dance Cam routine."; }
+  e.target.value = "";
+};
+let taps = [];
+$("tap").onclick = () => {
+  const now = performance.now();
+  if (taps.length && now - taps[taps.length - 1] > 2500) taps = [];
+  taps.push(now); if (taps.length > 8) taps.shift();
+  if (taps.length >= 3) $("bpm").value = Math.round(60000 / ((taps[taps.length - 1] - taps[0]) / (taps.length - 1)));
+};
+
+/* ---------------- camera and pose tracking ---------------- */
 async function openCamera() {
   if (stream) return;
   if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia)
     throw new Error("This browser cannot use the camera here. Open the page from a web address that starts with https.");
   stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user", width: { ideal: 640 }, height: { ideal: 480 } }, audio: false });
-  video.srcObject = stream;
-  await video.play();
+  video.srcObject = stream; await video.play();
 }
 
-function drawCover(c, w, h) {
+let tracker = null, busy = false, body = null, bodyAt = 0;
+async function openTracker() {
+  if (tracker) return;
+  if (typeof Pose === "undefined") throw new Error("The pose files are missing. Make sure the \"pose\" folder was uploaded next to this page.");
+  const t = new Pose({ locateFile: f => "pose/" + f });
+  t.setOptions({ modelComplexity: 0, smoothLandmarks: true, enableSegmentation: false, minDetectionConfidence: 0.5, minTrackingConfidence: 0.5 });
+  t.onResults(r => {
+    // Flip left/right so the picture works like a mirror.
+    body = r.poseLandmarks ? r.poseLandmarks.map(p => ({ x: 1 - p.x, y: p.y, v: p.visibility == null ? 1 : p.visibility })) : null;
+    bodyAt = performance.now();
+  });
+  await t.initialize();
+  tracker = t;
+}
+function track() {
+  if (!tracker || busy || video.readyState < 2) return;
+  busy = true;
+  tracker.send({ image: video }).catch(() => {}).then(() => { busy = false; });
+}
+
+// Where the camera picture sits on screen (it is cropped to fill the window).
+let view = { ox: 0, oy: 0, dw: 1, dh: 1 };
+function drawCamera(W, H) {
   const vw = video.videoWidth || 640, vh = video.videoHeight || 480;
-  const s = Math.max(w / vw, h / vh), dw = vw * s, dh = vh * s;
-  c.save(); c.translate(w, 0); c.scale(-1, 1);            // mirror, so it feels like a mirror
-  c.drawImage(video, (w - dw) / 2, (h - dh) / 2, dw, dh);
-  c.restore();
+  const s = Math.max(W / vw, H / vh), dw = vw * s, dh = vh * s;
+  view = { ox: (W - dw) / 2, oy: (H - dh) / 2, dw, dh };
+  ctx.save(); ctx.translate(W, 0); ctx.scale(-1, 1);
+  ctx.drawImage(video, view.ox, view.oy, dw, dh); ctx.restore();
 }
+const onScreen = p => ({ x: view.ox + p.x * view.dw, y: view.oy + p.y * view.dh });
 
-/* ---------------- motion detection ----------------
-   The page shrinks each camera frame to a tiny picture and compares it with
-   the frame before. Pixels that changed a lot count as movement. A target is
-   "hit" when enough pixels inside its circle changed. */
-let prevGray = null;
-const zoneLevel = ZONES.map(() => 0);
-let globalLevel = 0;
-
-function readMotion(W, H) {
-  const mw = 96, mh = Math.max(40, Math.round(96 * H / W));
-  if (mcan.width !== mw || mcan.height !== mh) { mcan.width = mw; mcan.height = mh; prevGray = null; }
-  drawCover(mctx, mw, mh);
-  const d = mctx.getImageData(0, 0, mw, mh).data, n = mw * mh;
-  const gray = new Uint8Array(n);
-  for (let i = 0; i < n; i++) gray[i] = (d[i * 4] * 3 + d[i * 4 + 1] * 6 + d[i * 4 + 2]) / 10;
-  if (prevGray) {
-    let all = 0;
-    const moved = new Uint8Array(n);
-    for (let i = 0; i < n; i++) if (Math.abs(gray[i] - prevGray[i]) > 28) { moved[i] = 1; all++; }
-    globalLevel = Math.max(all / n, globalLevel * 0.7);
-    const r = Math.round(Math.min(mw, mh) * 0.15);
-    ZONES.forEach((z, k) => {
-      const cx = Math.round(z.x * mw), cy = Math.round(z.y * mh);
-      let hit = 0, tot = 0;
-      for (let y = Math.max(0, cy - r); y < Math.min(mh, cy + r); y++)
-        for (let x = Math.max(0, cx - r); x < Math.min(mw, cx + r); x++) { tot++; hit += moved[y * mw + x]; }
-      zoneLevel[k] = Math.max(tot ? hit / tot : 0, zoneLevel[k] * 0.75);
-    });
+/* Turn the body points into directions for each body part. */
+function readPose(lm) {
+  if (!lm) return null;
+  const asp = (video.videoWidth || 4) / (video.videoHeight || 3), f = {};
+  for (const k in LIMBS) {
+    const a = lm[LIMBS[k][0]], b = lm[LIMBS[k][1]];
+    if (!a || !b || a.v < 0.5 || b.v < 0.5) continue;
+    const x = (b.x - a.x) * asp, y = b.y - a.y, len = Math.hypot(x, y);
+    if (len > 0.01) f[k] = [x / len, y / len];
   }
-  prevGray = gray;
+  if (lm[11].v > 0.5 && lm[12].v > 0.5 && lm[23].v > 0.5 && lm[24].v > 0.5) {
+    const x = ((lm[11].x + lm[12].x) - (lm[23].x + lm[24].x)) * asp / 2, y = ((lm[11].y + lm[12].y) - (lm[23].y + lm[24].y)) / 2;
+    const len = Math.hypot(x, y); if (len > 0.01) f.torso = [x / len, y / len];
+  }
+  return f;
 }
-const ZONE_ON = 0.10;     // share of a circle that must move to count
-const STILL = 0.03;       // whole-picture movement allowed during FREEZE
+const toVectors = angles => { const v = {}; for (const k in angles) if (typeof angles[k] === "number") v[k] = [Math.cos(rad(angles[k])), Math.sin(rad(angles[k]))]; return v; };
+const toAngles = f => { const a = {}; for (const k in f) a[k] = Math.round(Math.atan2(f[k][1], f[k][0]) * 180 / Math.PI + 360) % 360; return a; };
+
+/* How close is the dancer to the target pose? 1 = exact match, 0 or less = far off. */
+function matchScore(target, f) {
+  if (!f) return -1;
+  let sum = 0, wsum = 0;
+  for (const k in target) {
+    const w = k === "torso" ? 0.8 : LIMBS[k][2], isArm = ARM_KEYS.includes(k);
+    if (!f[k]) { if (isArm) wsum += w; continue; }      // a hidden arm counts as a miss, hidden legs are skipped
+    sum += w * (target[k][0] * f[k][0] + target[k][1] * f[k][1]); wsum += w;
+  }
+  return wsum ? sum / wsum : -1;
+}
+
+/* ---------------- drawing stick figures ---------------- */
+function figure(angles, cx, cy, s) {
+  const A = k => rad(angles[k] != null ? angles[k] : REST[k]);
+  const step = (p, k, len) => ({ x: p.x + Math.cos(A(k)) * len * s, y: p.y + Math.sin(A(k)) * len * s });
+  const t = A("torso"), px = -Math.sin(t), py = Math.cos(t);
+  const sc = { x: cx, y: cy }, hc = { x: cx - Math.cos(t) * 1.5 * s, y: cy - Math.sin(t) * 1.5 * s };
+  const P = {};
+  P.ls = { x: sc.x + px * 0.5 * s, y: sc.y + py * 0.5 * s }; P.rs = { x: sc.x - px * 0.5 * s, y: sc.y - py * 0.5 * s };
+  P.lh = { x: hc.x + px * 0.3 * s, y: hc.y + py * 0.3 * s }; P.rh = { x: hc.x - px * 0.3 * s, y: hc.y - py * 0.3 * s };
+  P.le = step(P.ls, "la1", 0.8); P.lw = step(P.le, "la2", 0.75);
+  P.re = step(P.rs, "ra1", 0.8); P.rw = step(P.re, "ra2", 0.75);
+  P.lk = step(P.lh, "ll1", 0.95); P.lf = step(P.lk, "ll2", 0.9);
+  P.rk = step(P.rh, "rl1", 0.95); P.rf = step(P.rk, "rl2", 0.9);
+  P.head = { x: sc.x + Math.cos(t) * 0.72 * s, y: sc.y + Math.sin(t) * 0.72 * s };
+  return P;
+}
+function drawFigure(angles, cx, cy, s, color, width, legs, hollow) {
+  const P = figure(angles, cx, cy, s);
+  ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineWidth = width; ctx.lineCap = "round"; ctx.lineJoin = "round";
+  const line = (...pts) => { ctx.beginPath(); pts.forEach((p, i) => i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y)); ctx.stroke(); };
+  line(P.lw, P.le, P.ls, P.rs, P.re, P.rw);
+  line(P.ls, P.lh, P.rh, P.rs);
+  if (legs) { line(P.lh, P.lk, P.lf); line(P.rh, P.rk, P.rf); }
+  ctx.beginPath(); ctx.arc(P.head.x, P.head.y, 0.38 * s, 0, 7); if (hollow) ctx.stroke(); else ctx.fill();
+}
+function drawBody(lm, color) {
+  ctx.strokeStyle = color; ctx.lineWidth = 6; ctx.lineCap = "round";
+  for (const [a, b] of BONES) {
+    if (lm[a].v < 0.5 || lm[b].v < 0.5) continue;
+    const p = onScreen(lm[a]), q = onScreen(lm[b]);
+    ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(q.x, q.y); ctx.stroke();
+  }
+  ctx.fillStyle = "#fff";
+  for (const i of [11, 12, 13, 14, 15, 16, 23, 24, 25, 26, 27, 28]) {
+    if (lm[i].v < 0.5) continue; const p = onScreen(lm[i]);
+    ctx.beginPath(); ctx.arc(p.x, p.y, 5, 0, 7); ctx.fill();
+  }
+}
 
 /* ---------------- music ---------------- */
 function makeSynth(song) {
@@ -289,17 +385,14 @@ function makeSynth(song) {
   const pump = () => { while (t0 + step * half < ac.currentTime + 0.2) { play(step, t0 + step * half); step++; } };
   pump(); timer = setInterval(pump, 40);
   return {
-    time: () => ac.currentTime - t0,
-    length: song.seconds || 60,
+    time: () => ac.currentTime - t0, length: song.seconds || 60,
     done: () => ac.currentTime - t0 >= (song.seconds || 60),
     stop: () => { clearInterval(timer); ac.close(); },
   };
 }
-
 function makePlayer(song) {
   return new Promise((ok, bad) => {
-    const a = new Audio();
-    a.preload = "auto"; a.src = song.file;
+    const a = new Audio(); a.preload = "auto"; a.src = song.file;
     let ended = false;
     a.onended = () => { ended = true; };
     a.onerror = () => bad(new Error("That song file could not be played. Try an mp3 file."));
@@ -307,196 +400,259 @@ function makePlayer(song) {
       a.play().then(() => ok({
         time: () => a.currentTime - (song.offset || 0),
         length: (isFinite(a.duration) ? a.duration : 180) - (song.offset || 0),
-        done: () => ended,
-        stop: () => { a.pause(); a.src = ""; },
-      })).catch(() => bad(new Error("The browser blocked the music. Click START again.")));
+        done: () => ended, stop: () => { a.pause(); a.src = ""; },
+      })).catch(() => bad(new Error("The browser blocked the music. Press START again.")));
     };
   });
 }
 
 /* ---------------- building the dance ---------------- */
-function buildChart(song, level, length) {
+function autoChart(song, level, length) {
   const spb = 60 / song.bpm, list = [];
   let seed = 7 + song.bpm * 13 + level.step * 101 + song.title.length;
   const rnd = () => (seed = (seed * 1664525 + 1013904223) >>> 0) / 4294967296;
-  let last = -1, count = 0, skip = 0;
-  const add = (beat) => {
-    const t = beat * spb;
-    if (t > length - 1.5) return;
-    count++;
-    if (count % 9 === 0) { list.push({ t, freeze: true, zones: [] }); skip = 1; return; }
-    if (rnd() < level.doubles) { list.push({ t, zones: DOUBLES[Math.floor(rnd() * DOUBLES.length)].slice() }); last = -1; return; }
-    let z; do { z = Math.floor(rnd() * ZONES.length); } while (z === last);
-    last = z; list.push({ t, zones: [z] });
+  let last = -1;
+  const add = beat => {
+    const t = beat * spb; if (t > length - 1.5) return;
+    let i; do { i = Math.floor(rnd() * POSES.length); } while (i === last);
+    last = i; list.push({ t, name: POSES[i].name, angles: POSES[i] });
   };
   for (let beat = 8; beat * spb < length; beat += level.step) {
-    if (skip) { skip = 0; continue; }
     add(beat);
-    if (level.extra && rnd() < level.extra && !skip) add(beat + 1);
+    if (level.extra && rnd() < level.extra) add(beat + 1);
   }
-  list.sort((a, b) => a.t - b.t);
+  return list;
+}
+function routineChart(r, length) {
+  return r.moves.filter(m => m.t < length - 0.5).map(m => ({ t: m.t, name: "", angles: m.p }));
+}
+function recordSlots(song, length) {
+  const spb = 60 / song.bpm, step = spb * 2 < 0.9 ? 4 : 2, list = [];
+  for (let beat = 8; beat * spb < length - 1.5; beat += step) list.push({ t: beat * spb, state: 0, shot: null, gap: 9 });
   return list;
 }
 
-/* ---------------- game ---------------- */
-async function startGame() {
-  $("err").textContent = "";
-  $("start").disabled = true;
+/* ---------------- starting ---------------- */
+async function startGame(mode) {
+  $("err").textContent = ""; $("start").disabled = $("record").disabled = true;
+  const note = $("start").textContent; $("start").textContent = "LOADING...";
   try {
-    await openCamera();
     const song = currentSong(), level = LEVELS[levelPick];
+    let routine = null;
+    if (mode === "play" && dancePick === "mine") routine = knownRoutine(song);
+    if (mode === "play" && dancePick === "class" && song.routine) {
+      const res = await fetch(song.routine);
+      if (!res.ok) throw new Error("The class routine file for this song could not be found.");
+      routine = await res.json();
+    }
+    await openCamera();
+    await openTracker();
+    await tracker.send({ image: video });          // warm up, so the first poses are not missed
     const music = song.builtIn ? makeSynth(song) : await makePlayer(song);
-    G = {
-      song, level, music, spb: 60 / song.bpm,
-      chart: buildChart(song, level, music.length),
-      score: 0, combo: 0, best: 0, perfect: 0, good: 0, pops: [], flash: 0,
-    };
-    for (const n of G.chart) { n.state = 0; n.peak = 0; }
-    prevGray = null; zoneLevel.fill(0); globalLevel = 0;
-    show("game"); running = true;
+    G = { mode, song, level, music, spb: 60 / song.bpm, score: 0, combo: 0, best: 0, perfect: 0, good: 0, pops: [], snap: 0 };
+    if (mode === "record") G.chart = recordSlots(song, music.length);
+    else {
+      G.chart = routine ? routineChart(routine, music.length) : autoChart(song, level, music.length);
+      for (const n of G.chart) { n.state = 0; n.top = -1; n.vec = toVectors(n.angles); n.legs = "ll1" in n.vec || "rl1" in n.vec; }
+    }
+    body = null; show("game"); running = true;
     cancelAnimationFrame(raf); raf = requestAnimationFrame(frame);
   } catch (e) {
     $("err").textContent = e && e.name === "NotAllowedError"
       ? "The camera was blocked. Allow the camera for this page, then press START."
       : (e && e.message) || "Something went wrong starting the game.";
+    show("menu");
   }
-  $("start").disabled = false;
+  $("start").textContent = note; $("start").disabled = $("record").disabled = false;
 }
 
-function pop(text, color, x, y) { G.pops.push({ text, color, x, y, born: performance.now() }); }
-
-function judge(now) {
-  for (const n of G.chart) {
-    if (n.state) continue;
-    if (n.freeze) {
-      if (now > n.t - 0.1 && now < n.t + 0.6) n.peak = Math.max(n.peak, globalLevel);
-      if (now >= n.t + 0.6) {
-        if (n.peak < STILL) score(n, 100, "FROZEN!", "#29e0ff", 0.5, 0.42);
-        else miss(n, 0.5, 0.42);
-      }
-      continue;
-    }
-    const dt = now - n.t;
-    if (dt < -0.25) break;
-    if (dt <= 0.30) {
-      if (n.zones.every(z => zoneLevel[z] > ZONE_ON)) {
-        const z = ZONES[n.zones[0]];
-        if (Math.abs(dt) < 0.13) score(n, 100, "PERFECT", "#ffd23d", z.x, z.y);
-        else score(n, 60, "GOOD", "#4dff9a", z.x, z.y);
-      }
-    } else miss(n, ZONES[n.zones[0]].x, ZONES[n.zones[0]].y);
-  }
-}
-function score(n, pts, text, color, x, y) {
+function pop(text, color) { G.pops.push({ text, color, born: performance.now() }); }
+function award(n, pts, text, color) {
   n.state = 1; G.combo++; G.best = Math.max(G.best, G.combo);
   if (pts === 100) G.perfect++; else G.good++;
-  G.score += Math.round(pts * (n.zones.length > 1 ? 1.5 : 1) * (1 + Math.min(G.combo, 20) / 10));
-  G.flash = 1;
-  pop(text + (G.combo > 2 ? "  x" + G.combo : ""), color, x, y);
+  G.score += Math.round(pts * (1 + Math.min(G.combo, 20) / 10));
+  pop(text + (G.combo > 2 ? "  x" + G.combo : ""), color);
 }
-function miss(n, x, y) { n.state = 2; G.combo = 0; pop("MISS", "#ff6b6b", x, y); }
 
+function judge(now, pose) {
+  let live = null;
+  for (const n of G.chart) {
+    if (n.state) continue;
+    const dt = now - n.t;
+    if (dt < -0.3) break;
+    if (dt <= 0.45) {
+      const m = matchScore(n.vec, pose);
+      n.top = Math.max(n.top, m); live = { n, m };
+      if (n.top >= G.level.perfect) award(n, 100, "PERFECT", "#ffd23d");
+    } else if (n.top >= G.level.good) award(n, 60, "GOOD", "#4dff9a");
+    else { n.state = 2; G.combo = 0; pop("MISS", "#ff6b6b"); }
+  }
+  return live;
+}
+
+function capture(now, pose) {
+  for (const n of G.chart) {
+    if (n.state) continue;
+    const dt = now - n.t;
+    if (dt < -0.15) break;
+    if (dt <= 0.15) {
+      if (pose && ARM_KEYS.every(k => pose[k]) && Math.abs(dt) < n.gap) { n.gap = Math.abs(dt); n.shot = toAngles(pose); }
+    } else { n.state = n.shot ? 1 : 2; if (n.shot) { G.snap = performance.now(); G.good++; } }
+  }
+}
+
+/* ---------------- one frame of the game ---------------- */
 function frame() {
   if (!running) return;
   const W = stage.width = stage.clientWidth, H = stage.height = stage.clientHeight;
-  const now = G.music.time(), R = Math.min(W, H) * 0.115, lead = Math.max(1.1, G.spb * 2);
+  const now = G.music.time(), unit = Math.min(W, H), lead = Math.max(1.6, G.spb * (G.mode === "record" ? 2 : G.level.step));
+  track();
+  if (video.readyState >= 2) drawCamera(W, H); else { ctx.fillStyle = "#000"; ctx.fillRect(0, 0, W, H); }
+  ctx.fillStyle = "rgba(8,8,30,0.35)"; ctx.fillRect(0, 0, W, H);
 
-  if (video.readyState >= 2) { readMotion(W, H); drawCover(ctx, W, H); }
-  else { ctx.fillStyle = "#000"; ctx.fillRect(0, 0, W, H); }
-  ctx.fillStyle = "rgba(8,8,30,0.38)"; ctx.fillRect(0, 0, W, H);
+  const fresh = body && performance.now() - bodyAt < 600, lm = fresh ? body : null, pose = readPose(lm);
+  const live = G.mode === "record" ? (capture(now, pose), null) : judge(now, pose);
 
-  judge(now);
-
-  // beat pulse around the edge
+  // beat pulse
   const phase = ((now / G.spb) % 1 + 1) % 1, pulse = Math.pow(1 - phase, 3);
-  ctx.lineWidth = 6 + pulse * 14; ctx.strokeStyle = "rgba(255,61,154," + (0.25 + pulse * 0.5) + ")";
-  ctx.strokeRect(0, 0, W, H);
+  ctx.lineWidth = 6 + pulse * 12; ctx.strokeStyle = "rgba(255,61,154," + (0.25 + pulse * 0.5) + ")"; ctx.strokeRect(0, 0, W, H);
 
-  // resting spots
-  ZONES.forEach((z, k) => {
-    ctx.beginPath(); ctx.arc(z.x * W, z.y * H, R, 0, 7);
-    ctx.lineWidth = 2; ctx.strokeStyle = "rgba(255,255,255,0.18)"; ctx.stroke();
-    if (zoneLevel[k] > ZONE_ON) { ctx.fillStyle = "rgba(255,255,255,0.10)"; ctx.fill(); }
-  });
+  // the dancer's tracked skeleton
+  if (lm) {
+    const m = live ? live.m : 0;
+    drawBody(lm, live ? (m >= G.level.perfect ? "#ffd23d" : m >= G.level.good ? "#4dff9a" : "#ff6b9a") : "#29e0ff");
+  }
 
-  // upcoming moves
-  let freezeOn = null;
-  for (const n of G.chart) {
-    if (n.state) continue;
-    const until = n.t - now;
-    if (until > lead) break;
-    if (n.freeze) { freezeOn = n; continue; }
-    const k = Math.max(0, until / lead);
-    n.zones.forEach(zi => {
-      const z = ZONES[zi], x = z.x * W, y = z.y * H, col = COLORS[zi];
-      ctx.beginPath(); ctx.arc(x, y, R, 0, 7);
-      ctx.fillStyle = col + "55"; ctx.fill();
-      ctx.lineWidth = 5; ctx.strokeStyle = col; ctx.stroke();
-      ctx.beginPath(); ctx.arc(x, y, R * (1 + k * 1.8), 0, 7);
-      ctx.lineWidth = 4; ctx.strokeStyle = "rgba(255,255,255," + (1 - k * 0.6) + ")"; ctx.stroke();
-      if (n.zones.length > 1) {
-        ctx.fillStyle = "#fff"; ctx.font = "800 " + Math.round(R * 0.42) + "px system-ui,sans-serif";
-        ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText("BOTH", x, y);
+  const next = G.chart.find(n => !n.state);
+  const laneH = Math.max(96, unit * 0.2), laneY = H - laneH, hitX = W * 0.16, speed = W * 0.2;
+
+  if (G.mode === "play") {
+    // ghost pose to step into, sized and placed on the dancer
+    if (next && next.t - now < lead && lm && lm[11].v > 0.5 && lm[12].v > 0.5) {
+      const a = onScreen(lm[11]), b = onScreen(lm[12]);
+      const k = Math.min(1, Math.max(0, 1 - (next.t - now) / lead));
+      ctx.globalAlpha = 0.25 + k * 0.55;
+      drawFigure(next.angles, (a.x + b.x) / 2, (a.y + b.y) / 2, Math.max(40, Math.hypot(a.x - b.x, a.y - b.y)), "#ffffff", 10 + k * 6, next.legs, true);
+      ctx.globalAlpha = 1;
+    }
+    // pose cards sliding toward the NOW box
+    ctx.fillStyle = "rgba(0,0,0,0.55)"; ctx.fillRect(0, laneY, W, laneH);
+    const cw = laneH * 0.78, ch = laneH * 0.86;
+    ctx.strokeStyle = "#ffd23d"; ctx.lineWidth = 4; ctx.strokeRect(hitX - cw / 2 - 5, laneY + (laneH - ch) / 2 - 5, cw + 10, ch + 10);
+    ctx.fillStyle = "#ffd23d"; ctx.font = "800 13px system-ui,sans-serif"; ctx.textAlign = "center"; ctx.textBaseline = "bottom";
+    ctx.fillText("NOW", hitX, laneY + (laneH - ch) / 2 - 8);
+    for (const n of G.chart) {
+      const x = hitX + (n.t - now) * speed;
+      if (x > W + cw) break; if (x < -cw) continue;
+      const y = laneY + (laneH - ch) / 2;
+      ctx.fillStyle = n.state === 1 ? "#1f5f3d" : n.state === 2 ? "#5a2030" : "#2a2a5a";
+      ctx.fillRect(x - cw / 2, y, cw, ch);
+      const s = ch / (n.legs ? 5.0 : 3.6);
+      drawFigure(n.angles, x, y + 1.35 * s + (n.legs ? 0 : ch * 0.08), s, "#ffffff", Math.max(3, s * 0.16), n.legs);
+    }
+    // big preview of the next pose and how close the dancer is
+    if (next && next.t - now < lead + 1) {
+      const bx = W - unit * 0.2, by = 86, bw = unit * 0.17, bh = unit * 0.25;
+      ctx.fillStyle = "rgba(0,0,0,0.55)"; ctx.fillRect(bx, by, bw, bh);
+      const s = bh / (next.legs ? 5.4 : 4.0);
+      drawFigure(next.angles, bx + bw / 2, by + 1.5 * s, s, "#ffd23d", Math.max(4, s * 0.2), next.legs);
+      ctx.fillStyle = "#fff"; ctx.font = "700 " + Math.round(bw * 0.11) + "px system-ui,sans-serif"; ctx.textAlign = "center"; ctx.textBaseline = "bottom";
+      ctx.fillText(next.name || "NEXT", bx + bw / 2, by + bh - 6);
+      if (live) {
+        const m = Math.max(0, live.m);
+        ctx.fillStyle = "rgba(255,255,255,0.2)"; ctx.fillRect(bx, by + bh + 6, bw, 12);
+        ctx.fillStyle = m >= G.level.perfect ? "#ffd23d" : m >= G.level.good ? "#4dff9a" : "#ff6b9a"; ctx.fillRect(bx, by + bh + 6, bw * m, 12);
       }
-    });
-  }
-  if (freezeOn) {
-    const until = freezeOn.t - now;
-    ctx.fillStyle = "rgba(41,224,255," + (until < 0.1 ? 0.28 : 0.12) + ")"; ctx.fillRect(0, 0, W, H);
+    }
+  } else {
+    // recording a routine
+    ctx.fillStyle = "rgba(0,0,0,0.55)"; ctx.fillRect(0, laneY, W, laneH);
     ctx.fillStyle = "#fff"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
-    ctx.font = "900 " + Math.round(Math.min(W, H) * 0.14) + "px system-ui,sans-serif";
-    ctx.fillText(until > 0.1 ? "GET READY..." : "FREEZE!", W / 2, H * 0.42);
+    ctx.font = "800 " + Math.round(laneH * 0.26) + "px system-ui,sans-serif";
+    ctx.fillText("RECORDING  ·  " + G.good + " poses saved  ·  strike a new pose each time the ring closes", W / 2, laneY + laneH / 2, W - 40);
+    if (next && next.t - now < lead) {
+      const k = Math.max(0, (next.t - now) / lead);
+      ctx.beginPath(); ctx.arc(W / 2, H * 0.2, unit * 0.06 * (1 + k * 2), 0, 7); ctx.lineWidth = 6; ctx.strokeStyle = "#fff"; ctx.stroke();
+      ctx.beginPath(); ctx.arc(W / 2, H * 0.2, unit * 0.06, 0, 7); ctx.fillStyle = "#ff3d9a"; ctx.fill();
+    }
+    const since = performance.now() - G.snap;
+    if (since < 250) { ctx.fillStyle = "rgba(255,255,255," + (0.5 * (1 - since / 250)) + ")"; ctx.fillRect(0, 0, W, H); }
   }
 
-  // count-in
-  const first = G.chart.length ? G.chart[0].t : 0;
-  if (now < first - lead) {
-    ctx.fillStyle = "#fff"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
-    ctx.font = "800 " + Math.round(Math.min(W, H) * 0.07) + "px system-ui,sans-serif";
-    ctx.fillText("Wave a hand through a circle when the ring closes", W / 2, H * 0.42);
+  // messages
+  ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillStyle = "#fff";
+  if (!lm || !ARM_KEYS.some(k => pose && pose[k])) {
+    ctx.font = "800 " + Math.round(unit * 0.055) + "px system-ui,sans-serif";
+    ctx.fillText("I can't see you yet. Step back so your arms fit on screen.", W / 2, H * 0.45, W - 60);
+  } else if (G.chart.length && now < G.chart[0].t - lead) {
+    ctx.font = "800 " + Math.round(unit * 0.06) + "px system-ui,sans-serif";
+    ctx.fillText(G.mode === "record" ? "Get ready to dance..." : "Get ready... copy each pose as it reaches NOW", W / 2, H * 0.3, W - 60);
   }
-
-  // pop-up words
   const real = performance.now();
-  G.pops = G.pops.filter(p => real - p.born < 700);
+  G.pops = G.pops.filter(p => real - p.born < 750);
   for (const p of G.pops) {
-    const a = (real - p.born) / 700;
-    ctx.globalAlpha = 1 - a; ctx.fillStyle = p.color; ctx.textAlign = "center"; ctx.textBaseline = "middle";
-    ctx.font = "900 " + Math.round(R * 0.5) + "px system-ui,sans-serif";
-    ctx.fillText(p.text, Math.min(W - R, Math.max(R, p.x * W)), p.y * H - R * 0.4 - a * R);
-    ctx.globalAlpha = 1;
+    const a = (real - p.born) / 750;
+    ctx.globalAlpha = 1 - a; ctx.fillStyle = p.color; ctx.font = "900 " + Math.round(unit * 0.09) + "px system-ui,sans-serif";
+    ctx.fillText(p.text, W / 2, H * 0.36 - a * unit * 0.06); ctx.globalAlpha = 1;
   }
 
   // score bar
   ctx.fillStyle = "rgba(0,0,0,0.55)"; ctx.fillRect(0, 0, W, 54);
   ctx.fillStyle = "#29e0ff"; ctx.fillRect(0, 50, W * Math.min(1, Math.max(0, now / G.music.length)), 4);
-  ctx.textBaseline = "middle"; ctx.font = "800 24px system-ui,sans-serif";
-  ctx.fillStyle = "#fff"; ctx.textAlign = "left"; ctx.fillText("SCORE " + G.score, 16, 26);
+  ctx.textBaseline = "middle"; ctx.font = "800 24px system-ui,sans-serif"; ctx.fillStyle = "#fff"; ctx.textAlign = "left";
+  ctx.fillText(G.mode === "record" ? "RECORDING" : "SCORE " + G.score, 16, 26);
   ctx.textAlign = "center"; ctx.fillStyle = "#9a9ac0"; ctx.font = "600 16px system-ui,sans-serif";
-  ctx.fillText(G.song.title + " · " + G.level.name, W / 2, 26);
-  ctx.textAlign = "right"; ctx.font = "800 24px system-ui,sans-serif";
-  ctx.fillStyle = G.combo > 4 ? "#ffd23d" : "#fff"; ctx.fillText("COMBO " + G.combo, W - 16, 26);
+  ctx.fillText(G.song.title + (G.mode === "play" ? " · " + G.level.name : ""), W / 2, 26);
+  if (G.mode === "play") {
+    ctx.textAlign = "right"; ctx.font = "800 24px system-ui,sans-serif"; ctx.fillStyle = G.combo > 4 ? "#ffd23d" : "#fff";
+    ctx.fillText("COMBO " + G.combo, W - 16, 26);
+  }
 
   if (G.music.done() || now > G.music.length + 0.5) { endGame(true); return; }
   raf = requestAnimationFrame(frame);
 }
 
+/* ---------------- finishing ---------------- */
+function stat(value, label) { return '<div class="stat"><b>' + value + "</b><span>" + label + "</span></div>"; }
 function endGame(showResults) {
   running = false; cancelAnimationFrame(raf);
   if (G && G.music) G.music.stop();
-  if (!showResults) { show("menu"); return; }
-  const total = G.chart.length || 1;
-  const acc = Math.round((G.perfect + G.good * 0.7) / total * 100);
-  $("rsong").textContent = G.song.title + " · " + G.level.name;
-  $("grade").textContent = acc >= 90 ? "S" : acc >= 78 ? "A" : acc >= 62 ? "B" : acc >= 45 ? "C" : "D";
-  $("rscore").textContent = G.score; $("racc").textContent = acc + "%";
-  $("rcombo").textContent = G.best; $("rperf").textContent = G.perfect + " / " + total;
+  if (!showResults) { show("menu"); buildMenu(); return; }
+  $("dl").style.display = "none"; $("rhint").textContent = "";
+  if (G.mode === "record") {
+    const moves = G.chart.filter(n => n.shot).map(n => ({ t: Math.round(n.t * 1000) / 1000, p: n.shot }));
+    $("rsong").textContent = G.song.title + " · new routine";
+    if (moves.length) {
+      lastRecorded = { title: G.song.title, bpm: G.song.bpm, moves };
+      sessionRoutines[G.song.title] = lastRecorded; saveRoutine(lastRecorded); dancePick = "mine";
+      $("grade").textContent = "SAVED"; $("rstats").innerHTML = stat(moves.length, "Poses saved") + stat(G.chart.length - moves.length, "Skipped");
+      $("again").textContent = "PLAY THIS ROUTINE"; $("dl").style.display = "";
+      $("rhint").textContent = "The routine is saved on this computer. Download the routine file to share it or to add it to the song list for everyone.";
+    } else {
+      $("grade").textContent = "OOPS"; $("rstats").innerHTML = stat(0, "Poses saved");
+      $("again").textContent = "TRY AGAIN"; $("rhint").textContent = "The camera could not see both arms. Step back and try again.";
+    }
+  } else {
+    const total = G.chart.length || 1, acc = Math.round((G.perfect + G.good * 0.7) / total * 100);
+    $("rsong").textContent = G.song.title + " · " + G.level.name;
+    $("grade").textContent = acc >= 90 ? "S" : acc >= 78 ? "A" : acc >= 62 ? "B" : acc >= 45 ? "C" : "D";
+    $("rstats").innerHTML = stat(G.score, "Score") + stat(acc + "%", "Accuracy") + stat(G.best, "Best combo") + stat(G.perfect + " / " + total, "Perfect poses");
+    $("again").textContent = "PLAY AGAIN";
+  }
   show("results");
 }
+$("dl").onclick = () => {
+  if (!lastRecorded) return;
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([JSON.stringify(lastRecorded)], { type: "application/json" }));
+  a.download = lastRecorded.title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") + ".json";
+  document.body.appendChild(a); a.click(); a.remove();
+};
 
-$("start").onclick = startGame;
-$("again").onclick = startGame;
-$("back").onclick = () => show("menu");
+$("start").onclick = () => startGame("play");
+$("record").onclick = () => startGame("record");
+$("again").onclick = () => startGame(G && G.mode === "record" && !G.chart.some(n => n.shot) ? "record" : "play");
+$("back").onclick = () => { show("menu"); buildMenu(); };
 $("quit").onclick = () => endGame(false);
 document.addEventListener("keydown", e => { if (e.key === "Escape" && running) endGame(false); });
 
